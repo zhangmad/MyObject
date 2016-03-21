@@ -1,0 +1,269 @@
+   1               		.file	"ledmap.c"
+   2               	__SP_H__ = 0x3e
+   3               	__SP_L__ = 0x3d
+   4               	__SREG__ = 0x3f
+   5               	__tmp_reg__ = 0
+   6               	__zero_reg__ = 1
+   7               		.text
+   8               	.Ltext0:
+   9               		.cfi_sections	.debug_frame
+  10               		.section	.text.ledmap_get_code,"ax",@progbits
+  11               	.global	ledmap_get_code
+  13               	ledmap_get_code:
+  14               	.LFB1:
+  15               		.file 1 "ledmap.c"
+   1:ledmap.c      **** #include <avr/pgmspace.h>
+   2:ledmap.c      **** #include "ledmap.h"
+   3:ledmap.c      **** #include "debug.h"
+   4:ledmap.c      **** 
+   5:ledmap.c      **** 
+   6:ledmap.c      **** #ifdef LEDMAP_ENABLE
+   7:ledmap.c      **** 
+   8:ledmap.c      **** static const uint16_t ledmaps[LED_COUNT] PROGMEM = {
+   9:ledmap.c      ****     [0] = LEDMAP_NUM_LOCK | LEDMAP_BACKLIGHT,   // LEDS1  - PB2
+  10:ledmap.c      ****     [1] = LEDMAP_BACKLIGHT,                     // LEDS6  - PF7
+  11:ledmap.c      ****     [2] = LEDMAP_BACKLIGHT,                     // LEDS11 - PF6
+  12:ledmap.c      ****     [3] = LEDMAP_BACKLIGHT,                     // LEDS16 - PF5
+  13:ledmap.c      ****     [4] = LEDMAP_BACKLIGHT,                     // PWM    - PB5
+  14:ledmap.c      **** };
+  15:ledmap.c      **** 
+  16:ledmap.c      **** ledmap_t ledmap_get_code(uint8_t index)
+  17:ledmap.c      **** {
+  16               		.loc 1 17 0
+  17               		.cfi_startproc
+  18               	.LVL0:
+  19               	/* prologue: function */
+  20               	/* frame size = 0 */
+  21               	/* stack size = 0 */
+  22               	.L__stack_usage = 0
+  23               	.LBB2:
+  18:ledmap.c      ****     return (ledmap_t) { .code = pgm_read_word(&ledmaps[index]) };
+  24               		.loc 1 18 0
+  25 0000 E82F      		mov r30,r24
+  26 0002 F0E0      		ldi r31,0
+  27 0004 EE0F      		lsl r30
+  28 0006 FF1F      		rol r31
+  29               	.LVL1:
+  30 0008 E050      		subi r30,lo8(-(ledmaps))
+  31 000a F040      		sbci r31,hi8(-(ledmaps))
+  32               	.LVL2:
+  33               	.LBE2:
+  19:ledmap.c      **** }
+  34               		.loc 1 19 0
+  35               	/* #APP */
+  36               	 ;  18 "ledmap.c" 1
+  37 000c 8591      		lpm r24, Z+
+  38 000e 9491      		lpm r25, Z
+  39               		
+  40               	 ;  0 "" 2
+  41               	/* #NOAPP */
+  42 0010 0895      		ret
+  43               		.cfi_endproc
+  44               	.LFE1:
+  46               		.section	.text.ledmap_led_init,"ax",@progbits
+  47               	.global	ledmap_led_init
+  49               	ledmap_led_init:
+  50               	.LFB2:
+  20:ledmap.c      **** 
+  21:ledmap.c      **** void ledmap_led_init(void)
+  22:ledmap.c      **** {
+  51               		.loc 1 22 0
+  52               		.cfi_startproc
+  53               	/* prologue: function */
+  54               	/* frame size = 0 */
+  55               	/* stack size = 0 */
+  56               	.L__stack_usage = 0
+  23:ledmap.c      ****     DDRB  |=  (1<<PB2);
+  57               		.loc 1 23 0
+  58 0000 229A      		sbi 0x4,2
+  24:ledmap.c      ****     PORTB |=  (1<<PB2);
+  59               		.loc 1 24 0
+  60 0002 2A9A      		sbi 0x5,2
+  25:ledmap.c      ****     DDRF  |=  (1<<PF7 | 1<<PF6 | 1<<PF5);
+  61               		.loc 1 25 0
+  62 0004 80B3      		in r24,0x10
+  63 0006 806E      		ori r24,lo8(-32)
+  64 0008 80BB      		out 0x10,r24
+  26:ledmap.c      ****     PORTF |=  (1<<PF7 | 1<<PF6 | 1<<PF5);
+  65               		.loc 1 26 0
+  66 000a 81B3      		in r24,0x11
+  67 000c 806E      		ori r24,lo8(-32)
+  68 000e 81BB      		out 0x11,r24
+  27:ledmap.c      ****     DDRB  |=  (1<<PB5);
+  69               		.loc 1 27 0
+  70 0010 259A      		sbi 0x4,5
+  28:ledmap.c      ****     PORTB &= ~(1<<PB5);
+  71               		.loc 1 28 0
+  72 0012 2D98      		cbi 0x5,5
+  73 0014 0895      		ret
+  74               		.cfi_endproc
+  75               	.LFE2:
+  77               		.section	.text.ledmap_led_on,"ax",@progbits
+  78               	.global	ledmap_led_on
+  80               	ledmap_led_on:
+  81               	.LFB3:
+  29:ledmap.c      **** }
+  30:ledmap.c      **** 
+  31:ledmap.c      **** void ledmap_led_on(uint8_t index)
+  32:ledmap.c      **** {
+  82               		.loc 1 32 0
+  83               		.cfi_startproc
+  84               	.LVL3:
+  85               	/* prologue: function */
+  86               	/* frame size = 0 */
+  87               	/* stack size = 0 */
+  88               	.L__stack_usage = 0
+  33:ledmap.c      ****     switch (index) {
+  89               		.loc 1 33 0
+  90 0000 8230      		cpi r24,lo8(2)
+  91 0002 01F0      		breq .L5
+  92 0004 00F4      		brsh .L6
+  93 0006 8823      		tst r24
+  94 0008 01F0      		breq .L7
+  95 000a 8130      		cpi r24,lo8(1)
+  96 000c 01F0      		breq .L8
+  97 000e 0895      		ret
+  98               	.L6:
+  99 0010 8330      		cpi r24,lo8(3)
+ 100 0012 01F0      		breq .L9
+ 101 0014 8430      		cpi r24,lo8(4)
+ 102 0016 01F0      		breq .L10
+ 103 0018 0895      		ret
+ 104               	.L7:
+  34:ledmap.c      ****         case 0:
+  35:ledmap.c      ****             PORTB &= ~(1<<PB2);
+ 105               		.loc 1 35 0
+ 106 001a 2A98      		cbi 0x5,2
+  36:ledmap.c      ****             break;
+ 107               		.loc 1 36 0
+ 108 001c 0895      		ret
+ 109               	.L8:
+  37:ledmap.c      ****         case 1:
+  38:ledmap.c      ****             PORTF &= ~(1<<PF7);
+ 110               		.loc 1 38 0
+ 111 001e 8F98      		cbi 0x11,7
+  39:ledmap.c      ****             break;
+ 112               		.loc 1 39 0
+ 113 0020 0895      		ret
+ 114               	.L5:
+  40:ledmap.c      ****         case 2:
+  41:ledmap.c      ****             PORTF &= ~(1<<PF6);
+ 115               		.loc 1 41 0
+ 116 0022 8E98      		cbi 0x11,6
+  42:ledmap.c      ****             break;
+ 117               		.loc 1 42 0
+ 118 0024 0895      		ret
+ 119               	.L9:
+  43:ledmap.c      ****         case 3:
+  44:ledmap.c      ****             PORTF &= ~(1<<PF5);
+ 120               		.loc 1 44 0
+ 121 0026 8D98      		cbi 0x11,5
+  45:ledmap.c      ****             break;
+ 122               		.loc 1 45 0
+ 123 0028 0895      		ret
+ 124               	.L10:
+  46:ledmap.c      ****         case 4:
+  47:ledmap.c      ****             PORTB |=  (1<<PB5);
+ 125               		.loc 1 47 0
+ 126 002a 2D9A      		sbi 0x5,5
+ 127 002c 0895      		ret
+ 128               		.cfi_endproc
+ 129               	.LFE3:
+ 131               		.section	.text.ledmap_led_off,"ax",@progbits
+ 132               	.global	ledmap_led_off
+ 134               	ledmap_led_off:
+ 135               	.LFB4:
+  48:ledmap.c      ****             break;
+  49:ledmap.c      ****     }
+  50:ledmap.c      **** }
+  51:ledmap.c      **** 
+  52:ledmap.c      **** void ledmap_led_off(uint8_t index)
+  53:ledmap.c      **** {
+ 136               		.loc 1 53 0
+ 137               		.cfi_startproc
+ 138               	.LVL4:
+ 139               	/* prologue: function */
+ 140               	/* frame size = 0 */
+ 141               	/* stack size = 0 */
+ 142               	.L__stack_usage = 0
+  54:ledmap.c      ****     switch (index) {
+ 143               		.loc 1 54 0
+ 144 0000 8230      		cpi r24,lo8(2)
+ 145 0002 01F0      		breq .L14
+ 146 0004 00F4      		brsh .L15
+ 147 0006 8823      		tst r24
+ 148 0008 01F0      		breq .L16
+ 149 000a 8130      		cpi r24,lo8(1)
+ 150 000c 01F0      		breq .L17
+ 151 000e 0895      		ret
+ 152               	.L15:
+ 153 0010 8330      		cpi r24,lo8(3)
+ 154 0012 01F0      		breq .L18
+ 155 0014 8430      		cpi r24,lo8(4)
+ 156 0016 01F0      		breq .L19
+ 157 0018 0895      		ret
+ 158               	.L16:
+  55:ledmap.c      ****         case 0:
+  56:ledmap.c      ****             PORTB |= (1<<PB2);
+ 159               		.loc 1 56 0
+ 160 001a 2A9A      		sbi 0x5,2
+  57:ledmap.c      ****             break;
+ 161               		.loc 1 57 0
+ 162 001c 0895      		ret
+ 163               	.L17:
+  58:ledmap.c      ****         case 1:
+  59:ledmap.c      ****             PORTF |= (1<<PF7);
+ 164               		.loc 1 59 0
+ 165 001e 8F9A      		sbi 0x11,7
+  60:ledmap.c      ****             break;
+ 166               		.loc 1 60 0
+ 167 0020 0895      		ret
+ 168               	.L14:
+  61:ledmap.c      ****         case 2:
+  62:ledmap.c      ****             PORTF |= (1<<PF6);
+ 169               		.loc 1 62 0
+ 170 0022 8E9A      		sbi 0x11,6
+  63:ledmap.c      ****             break;
+ 171               		.loc 1 63 0
+ 172 0024 0895      		ret
+ 173               	.L18:
+  64:ledmap.c      ****         case 3:
+  65:ledmap.c      ****             PORTF |= (1<<PF5);
+ 174               		.loc 1 65 0
+ 175 0026 8D9A      		sbi 0x11,5
+  66:ledmap.c      ****             break;
+ 176               		.loc 1 66 0
+ 177 0028 0895      		ret
+ 178               	.L19:
+  67:ledmap.c      ****         case 4:
+  68:ledmap.c      ****             PORTB &= ~(1<<PB5);
+ 179               		.loc 1 68 0
+ 180 002a 2D98      		cbi 0x5,5
+ 181 002c 0895      		ret
+ 182               		.cfi_endproc
+ 183               	.LFE4:
+ 185               		.section	.progmem.data.ledmaps,"a",@progbits
+ 188               	ledmaps:
+ 189 0000 0023      		.word	8960
+ 190 0002 0020      		.word	8192
+ 191 0004 0020      		.word	8192
+ 192 0006 0020      		.word	8192
+ 193 0008 0020      		.word	8192
+ 194               		.text
+ 195               	.Letext0:
+ 196               		.file 2 "/usr/local/CrossPack-AVR-20131216/avr/include/stdint.h"
+ 197               		.file 3 "../../tmk_core_custom/common/ledmap.h"
+DEFINED SYMBOLS
+                            *ABS*:00000000 ledmap.c
+/var/folders/21/2h6z05gn50s9p53ctp4w8vd00000gn/T//ccv9mR5D.s:2      *ABS*:0000003e __SP_H__
+/var/folders/21/2h6z05gn50s9p53ctp4w8vd00000gn/T//ccv9mR5D.s:3      *ABS*:0000003d __SP_L__
+/var/folders/21/2h6z05gn50s9p53ctp4w8vd00000gn/T//ccv9mR5D.s:4      *ABS*:0000003f __SREG__
+/var/folders/21/2h6z05gn50s9p53ctp4w8vd00000gn/T//ccv9mR5D.s:5      *ABS*:00000000 __tmp_reg__
+/var/folders/21/2h6z05gn50s9p53ctp4w8vd00000gn/T//ccv9mR5D.s:6      *ABS*:00000001 __zero_reg__
+/var/folders/21/2h6z05gn50s9p53ctp4w8vd00000gn/T//ccv9mR5D.s:13     .text.ledmap_get_code:00000000 ledmap_get_code
+/var/folders/21/2h6z05gn50s9p53ctp4w8vd00000gn/T//ccv9mR5D.s:188    .progmem.data.ledmaps:00000000 ledmaps
+/var/folders/21/2h6z05gn50s9p53ctp4w8vd00000gn/T//ccv9mR5D.s:49     .text.ledmap_led_init:00000000 ledmap_led_init
+/var/folders/21/2h6z05gn50s9p53ctp4w8vd00000gn/T//ccv9mR5D.s:80     .text.ledmap_led_on:00000000 ledmap_led_on
+/var/folders/21/2h6z05gn50s9p53ctp4w8vd00000gn/T//ccv9mR5D.s:134    .text.ledmap_led_off:00000000 ledmap_led_off
+
+NO UNDEFINED SYMBOLS

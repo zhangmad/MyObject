@@ -1,0 +1,1276 @@
+   1               		.file	"ledmap.c"
+   2               	__SP_H__ = 0x3e
+   3               	__SP_L__ = 0x3d
+   4               	__SREG__ = 0x3f
+   5               	__tmp_reg__ = 0
+   6               	__zero_reg__ = 1
+   7               		.text
+   8               	.Ltext0:
+   9               		.cfi_sections	.debug_frame
+  10               		.section	.text.update_led_state,"ax",@progbits
+  12               	update_led_state:
+  13               	.LFB14:
+  14               		.file 1 "../../tmk_core_custom/common/ledmap.c"
+   1:../../tmk_core_custom/common/ledmap.c **** #include "ledmap.h"
+   2:../../tmk_core_custom/common/ledmap.c **** #include "ledmap_in_eeprom.h"
+   3:../../tmk_core_custom/common/ledmap.c **** #include "led.h"
+   4:../../tmk_core_custom/common/ledmap.c **** #include "softpwm_led.h"
+   5:../../tmk_core_custom/common/ledmap.c **** #include "action_layer.h"
+   6:../../tmk_core_custom/common/ledmap.c **** #include "debug.h"
+   7:../../tmk_core_custom/common/ledmap.c **** 
+   8:../../tmk_core_custom/common/ledmap.c **** static led_state_t led_state_last = 0;
+   9:../../tmk_core_custom/common/ledmap.c **** static led_binding_t usb_led_binding = 0;
+  10:../../tmk_core_custom/common/ledmap.c **** static led_binding_t default_layer_binding = 0;
+  11:../../tmk_core_custom/common/ledmap.c **** static led_binding_t layer_binding = 0;
+  12:../../tmk_core_custom/common/ledmap.c **** static led_binding_t backlight_binding = 0;
+  13:../../tmk_core_custom/common/ledmap.c **** static led_binding_t reverse_binding = 0;
+  14:../../tmk_core_custom/common/ledmap.c **** 
+  15:../../tmk_core_custom/common/ledmap.c **** static void update_led_state(led_state_t state, uint8_t force);
+  16:../../tmk_core_custom/common/ledmap.c **** 
+  17:../../tmk_core_custom/common/ledmap.c **** void ledmap_init(void)
+  18:../../tmk_core_custom/common/ledmap.c **** {
+  19:../../tmk_core_custom/common/ledmap.c ****     for (uint8_t i = 0; i < LED_COUNT; i++) {
+  20:../../tmk_core_custom/common/ledmap.c ****         ledmap_t ledmap = ledmap_get_code(i);
+  21:../../tmk_core_custom/common/ledmap.c ****         if (ledmap.reverse) {
+  22:../../tmk_core_custom/common/ledmap.c ****             LED_BIT_SET(reverse_binding, i);
+  23:../../tmk_core_custom/common/ledmap.c ****         }
+  24:../../tmk_core_custom/common/ledmap.c ****         if (ledmap.backlight) {
+  25:../../tmk_core_custom/common/ledmap.c ****             LED_BIT_SET(backlight_binding, i);
+  26:../../tmk_core_custom/common/ledmap.c ****         }
+  27:../../tmk_core_custom/common/ledmap.c ****         switch (ledmap.binding) {
+  28:../../tmk_core_custom/common/ledmap.c ****             case LEDMAP_BINDING_DEFAULT_LAYER:
+  29:../../tmk_core_custom/common/ledmap.c ****                 LED_BIT_SET(default_layer_binding, i);
+  30:../../tmk_core_custom/common/ledmap.c ****                 break;
+  31:../../tmk_core_custom/common/ledmap.c ****             case LEDMAP_BINDING_LAYER:
+  32:../../tmk_core_custom/common/ledmap.c ****                 LED_BIT_SET(layer_binding, i);
+  33:../../tmk_core_custom/common/ledmap.c ****                 break;
+  34:../../tmk_core_custom/common/ledmap.c ****             case LEDMAP_BINDING_USB_LED:
+  35:../../tmk_core_custom/common/ledmap.c ****                 LED_BIT_SET(usb_led_binding, i);
+  36:../../tmk_core_custom/common/ledmap.c ****                 break;
+  37:../../tmk_core_custom/common/ledmap.c ****         }
+  38:../../tmk_core_custom/common/ledmap.c ****     }
+  39:../../tmk_core_custom/common/ledmap.c ****     ledmap_led_init();
+  40:../../tmk_core_custom/common/ledmap.c ****     update_led_state(0, 1);
+  41:../../tmk_core_custom/common/ledmap.c **** }
+  42:../../tmk_core_custom/common/ledmap.c **** 
+  43:../../tmk_core_custom/common/ledmap.c **** void led_set(uint8_t usb_led)
+  44:../../tmk_core_custom/common/ledmap.c **** {
+  45:../../tmk_core_custom/common/ledmap.c ****     if (usb_led_binding) {
+  46:../../tmk_core_custom/common/ledmap.c ****         led_state_t led_state = led_state_last;
+  47:../../tmk_core_custom/common/ledmap.c ****         for (uint8_t i = 0; i < LED_COUNT; i++) {
+  48:../../tmk_core_custom/common/ledmap.c ****             if (usb_led_binding & LED_BIT(i)) {
+  49:../../tmk_core_custom/common/ledmap.c ****                 uint8_t param = ledmap_get_code(i).param;
+  50:../../tmk_core_custom/common/ledmap.c ****                 (usb_led & (1 << param)) ? LED_BIT_SET(led_state, i) : LED_BIT_CLEAR(led_state, i);
+  51:../../tmk_core_custom/common/ledmap.c ****             }
+  52:../../tmk_core_custom/common/ledmap.c ****         }
+  53:../../tmk_core_custom/common/ledmap.c ****         update_led_state(led_state, 0);
+  54:../../tmk_core_custom/common/ledmap.c ****     }
+  55:../../tmk_core_custom/common/ledmap.c **** }
+  56:../../tmk_core_custom/common/ledmap.c **** 
+  57:../../tmk_core_custom/common/ledmap.c **** #ifndef NO_ACTION_LAYER
+  58:../../tmk_core_custom/common/ledmap.c **** void default_layer_state_change(uint32_t state)
+  59:../../tmk_core_custom/common/ledmap.c **** {
+  60:../../tmk_core_custom/common/ledmap.c ****     if (default_layer_binding) {
+  61:../../tmk_core_custom/common/ledmap.c ****         led_state_t led_state = led_state_last;
+  62:../../tmk_core_custom/common/ledmap.c ****         for (uint8_t i = 0; i < LED_COUNT; i++) {
+  63:../../tmk_core_custom/common/ledmap.c ****             if (default_layer_binding & LED_BIT(i)) {
+  64:../../tmk_core_custom/common/ledmap.c ****                 uint8_t param = ledmap_get_code(i).param;
+  65:../../tmk_core_custom/common/ledmap.c ****                 (state & (1UL << param)) ? LED_BIT_SET(led_state, i) : LED_BIT_CLEAR(led_state, i);
+  66:../../tmk_core_custom/common/ledmap.c ****             }
+  67:../../tmk_core_custom/common/ledmap.c ****         }
+  68:../../tmk_core_custom/common/ledmap.c ****         update_led_state(led_state, 0);
+  69:../../tmk_core_custom/common/ledmap.c ****     }
+  70:../../tmk_core_custom/common/ledmap.c **** }
+  71:../../tmk_core_custom/common/ledmap.c **** 
+  72:../../tmk_core_custom/common/ledmap.c **** void layer_state_change(uint32_t state)
+  73:../../tmk_core_custom/common/ledmap.c **** {
+  74:../../tmk_core_custom/common/ledmap.c ****     if (layer_binding) {
+  75:../../tmk_core_custom/common/ledmap.c ****         led_state_t led_state = led_state_last;
+  76:../../tmk_core_custom/common/ledmap.c ****         for (uint8_t i = 0; i < LED_COUNT; i++) {
+  77:../../tmk_core_custom/common/ledmap.c ****             if (layer_binding & LED_BIT(i)) {
+  78:../../tmk_core_custom/common/ledmap.c ****                 uint8_t param = ledmap_get_code(i).param;
+  79:../../tmk_core_custom/common/ledmap.c ****                 (state & (1UL << param)) ? LED_BIT_SET(led_state, i) : LED_BIT_CLEAR(led_state, i);
+  80:../../tmk_core_custom/common/ledmap.c ****             }
+  81:../../tmk_core_custom/common/ledmap.c ****         }
+  82:../../tmk_core_custom/common/ledmap.c ****         update_led_state(led_state, 0);
+  83:../../tmk_core_custom/common/ledmap.c ****     }
+  84:../../tmk_core_custom/common/ledmap.c **** }
+  85:../../tmk_core_custom/common/ledmap.c **** #endif
+  86:../../tmk_core_custom/common/ledmap.c **** 
+  87:../../tmk_core_custom/common/ledmap.c **** #ifdef SOFTPWM_LED_ENABLE
+  88:../../tmk_core_custom/common/ledmap.c **** void softpwm_led_init(void)
+  89:../../tmk_core_custom/common/ledmap.c **** {
+  90:../../tmk_core_custom/common/ledmap.c **** }
+  91:../../tmk_core_custom/common/ledmap.c **** 
+  92:../../tmk_core_custom/common/ledmap.c **** void softpwm_led_on(uint8_t index)
+  93:../../tmk_core_custom/common/ledmap.c **** {
+  94:../../tmk_core_custom/common/ledmap.c ****     if (backlight_binding & LED_BIT(index)) {
+  95:../../tmk_core_custom/common/ledmap.c ****         ledmap_led_on(index);
+  96:../../tmk_core_custom/common/ledmap.c ****     }
+  97:../../tmk_core_custom/common/ledmap.c **** }
+  98:../../tmk_core_custom/common/ledmap.c **** 
+  99:../../tmk_core_custom/common/ledmap.c **** void softpwm_led_off(uint8_t index)
+ 100:../../tmk_core_custom/common/ledmap.c **** {
+ 101:../../tmk_core_custom/common/ledmap.c ****     if (backlight_binding & LED_BIT(index)) {
+ 102:../../tmk_core_custom/common/ledmap.c ****         ledmap_led_off(index);
+ 103:../../tmk_core_custom/common/ledmap.c ****     }
+ 104:../../tmk_core_custom/common/ledmap.c **** }
+ 105:../../tmk_core_custom/common/ledmap.c **** 
+ 106:../../tmk_core_custom/common/ledmap.c **** void softpwm_led_state_change(uint8_t state)
+ 107:../../tmk_core_custom/common/ledmap.c **** {
+ 108:../../tmk_core_custom/common/ledmap.c ****     if (state) {
+ 109:../../tmk_core_custom/common/ledmap.c ****     }
+ 110:../../tmk_core_custom/common/ledmap.c ****     else {
+ 111:../../tmk_core_custom/common/ledmap.c ****         update_led_state(led_state_last, 1);
+ 112:../../tmk_core_custom/common/ledmap.c ****     }
+ 113:../../tmk_core_custom/common/ledmap.c **** }
+ 114:../../tmk_core_custom/common/ledmap.c **** #endif
+ 115:../../tmk_core_custom/common/ledmap.c **** 
+ 116:../../tmk_core_custom/common/ledmap.c **** void update_led_state(led_state_t state, uint8_t force)
+ 117:../../tmk_core_custom/common/ledmap.c **** {
+  15               		.loc 1 117 0
+  16               		.cfi_startproc
+  17               	.LVL0:
+  18 0000 DF92      		push r13
+  19               	.LCFI0:
+  20               		.cfi_def_cfa_offset 3
+  21               		.cfi_offset 13, -2
+  22 0002 EF92      		push r14
+  23               	.LCFI1:
+  24               		.cfi_def_cfa_offset 4
+  25               		.cfi_offset 14, -3
+  26 0004 FF92      		push r15
+  27               	.LCFI2:
+  28               		.cfi_def_cfa_offset 5
+  29               		.cfi_offset 15, -4
+  30 0006 0F93      		push r16
+  31               	.LCFI3:
+  32               		.cfi_def_cfa_offset 6
+  33               		.cfi_offset 16, -5
+  34 0008 1F93      		push r17
+  35               	.LCFI4:
+  36               		.cfi_def_cfa_offset 7
+  37               		.cfi_offset 17, -6
+  38 000a CF93      		push r28
+  39               	.LCFI5:
+  40               		.cfi_def_cfa_offset 8
+  41               		.cfi_offset 28, -7
+  42 000c DF93      		push r29
+  43               	.LCFI6:
+  44               		.cfi_def_cfa_offset 9
+  45               		.cfi_offset 29, -8
+  46               	/* prologue: function */
+  47               	/* frame size = 0 */
+  48               	/* stack size = 7 */
+  49               	.L__stack_usage = 7
+  50 000e F82E      		mov r15,r24
+  51 0010 E62E      		mov r14,r22
+ 118:../../tmk_core_custom/common/ledmap.c ****     led_state_t diff = led_state_last ^ state;
+  52               		.loc 1 118 0
+  53 0012 0091 0000 		lds r16,led_state_last
+  54 0016 0827      		eor r16,r24
+  55               	.LVL1:
+ 119:../../tmk_core_custom/common/ledmap.c ****     if (force || diff) {
+  56               		.loc 1 119 0
+  57 0018 6111      		cpse r22,__zero_reg__
+  58 001a 00C0      		rjmp .L2
+  59               		.loc 1 119 0 is_stmt 0 discriminator 1
+  60 001c 01F0      		breq .L1
+  61               	.L2:
+ 117:../../tmk_core_custom/common/ledmap.c **** {
+  62               		.loc 1 117 0 is_stmt 1
+  63 001e C0E0      		ldi r28,0
+  64 0020 D0E0      		ldi r29,0
+  65               	.LBB2:
+ 120:../../tmk_core_custom/common/ledmap.c ****         for (uint8_t i = 0; i < LED_COUNT; i++) {
+ 121:../../tmk_core_custom/common/ledmap.c ****             if (softpwm_led_get_state() && (backlight_binding & LED_BIT(i))) {
+ 122:../../tmk_core_custom/common/ledmap.c ****                 continue;
+ 123:../../tmk_core_custom/common/ledmap.c ****             }
+ 124:../../tmk_core_custom/common/ledmap.c ****             if (force || diff & LED_BIT(i)) {
+  66               		.loc 1 124 0
+  67 0022 10E0      		ldi r17,0
+  68               	.LVL2:
+  69               	.L9:
+  70 0024 DC2E      		mov r13,r28
+  71               	.LVL3:
+ 121:../../tmk_core_custom/common/ledmap.c ****             if (softpwm_led_get_state() && (backlight_binding & LED_BIT(i))) {
+  72               		.loc 1 121 0
+  73 0026 0E94 0000 		call softpwm_led_get_state
+  74               	.LVL4:
+  75 002a 8823      		tst r24
+  76 002c 01F0      		breq .L4
+ 121:../../tmk_core_custom/common/ledmap.c ****             if (softpwm_led_get_state() && (backlight_binding & LED_BIT(i))) {
+  77               		.loc 1 121 0 is_stmt 0 discriminator 1
+  78 002e 2091 0000 		lds r18,backlight_binding
+  79 0032 30E0      		ldi r19,0
+  80 0034 0C2E      		mov r0,r28
+  81 0036 00C0      		rjmp 2f
+  82               		1:
+  83 0038 3695      		lsr r19
+  84 003a 2795      		ror r18
+  85               		2:
+  86 003c 0A94      		dec r0
+  87 003e 02F4      		brpl 1b
+  88 0040 20FD      		sbrc r18,0
+  89 0042 00C0      		rjmp .L5
+  90               	.L4:
+  91               		.loc 1 124 0 is_stmt 1
+  92 0044 E110      		cpse r14,__zero_reg__
+  93 0046 00C0      		rjmp .L6
+  94               		.loc 1 124 0 is_stmt 0 discriminator 1
+  95 0048 9801      		movw r18,r16
+  96 004a 0C2E      		mov r0,r28
+  97 004c 00C0      		rjmp 2f
+  98               		1:
+  99 004e 3695      		lsr r19
+ 100 0050 2795      		ror r18
+ 101               		2:
+ 102 0052 0A94      		dec r0
+ 103 0054 02F4      		brpl 1b
+ 104 0056 20FF      		sbrs r18,0
+ 105 0058 00C0      		rjmp .L5
+ 106               	.L6:
+ 125:../../tmk_core_custom/common/ledmap.c ****                 if ((state ^ reverse_binding) & LED_BIT(i)) {
+ 107               		.loc 1 125 0 is_stmt 1
+ 108 005a 2091 0000 		lds r18,reverse_binding
+ 109 005e 2F25      		eor r18,r15
+ 110 0060 30E0      		ldi r19,0
+ 111 0062 0C2E      		mov r0,r28
+ 112 0064 00C0      		rjmp 2f
+ 113               		1:
+ 114 0066 3695      		lsr r19
+ 115 0068 2795      		ror r18
+ 116               		2:
+ 117 006a 0A94      		dec r0
+ 118 006c 02F4      		brpl 1b
+ 126:../../tmk_core_custom/common/ledmap.c ****                     ledmap_led_on(i);
+ 119               		.loc 1 126 0
+ 120 006e 8D2D      		mov r24,r13
+ 125:../../tmk_core_custom/common/ledmap.c ****                 if ((state ^ reverse_binding) & LED_BIT(i)) {
+ 121               		.loc 1 125 0
+ 122 0070 20FF      		sbrs r18,0
+ 123 0072 00C0      		rjmp .L7
+ 124               		.loc 1 126 0
+ 125 0074 0E94 0000 		call ledmap_led_on
+ 126               	.LVL5:
+ 127 0078 00C0      		rjmp .L5
+ 128               	.L7:
+ 127:../../tmk_core_custom/common/ledmap.c ****                 }
+ 128:../../tmk_core_custom/common/ledmap.c ****                 else {
+ 129:../../tmk_core_custom/common/ledmap.c ****                     ledmap_led_off(i);
+ 129               		.loc 1 129 0
+ 130 007a 0E94 0000 		call ledmap_led_off
+ 131               	.LVL6:
+ 132               	.L5:
+ 133 007e 2196      		adiw r28,1
+ 134               	.LVL7:
+ 120:../../tmk_core_custom/common/ledmap.c ****         for (uint8_t i = 0; i < LED_COUNT; i++) {
+ 135               		.loc 1 120 0
+ 136 0080 C530      		cpi r28,5
+ 137 0082 D105      		cpc r29,__zero_reg__
+ 138 0084 01F4      		brne .L9
+ 139               	.LBE2:
+ 130:../../tmk_core_custom/common/ledmap.c ****                 }
+ 131:../../tmk_core_custom/common/ledmap.c ****             }
+ 132:../../tmk_core_custom/common/ledmap.c ****         }
+ 133:../../tmk_core_custom/common/ledmap.c ****         led_state_last = state;
+ 140               		.loc 1 133 0
+ 141 0086 F092 0000 		sts led_state_last,r15
+ 142               	.LVL8:
+ 143               	.L1:
+ 144               	/* epilogue start */
+ 134:../../tmk_core_custom/common/ledmap.c ****     }
+ 135:../../tmk_core_custom/common/ledmap.c **** }
+ 145               		.loc 1 135 0
+ 146 008a DF91      		pop r29
+ 147 008c CF91      		pop r28
+ 148 008e 1F91      		pop r17
+ 149 0090 0F91      		pop r16
+ 150               	.LVL9:
+ 151 0092 FF90      		pop r15
+ 152               	.LVL10:
+ 153 0094 EF90      		pop r14
+ 154               	.LVL11:
+ 155 0096 DF90      		pop r13
+ 156 0098 0895      		ret
+ 157               		.cfi_endproc
+ 158               	.LFE14:
+ 160               		.section	.text.matrix_power_up,"ax",@progbits
+ 161               		.weak	matrix_power_up
+ 163               	matrix_power_up:
+ 164               	.LFB3:
+ 165               		.file 2 "../../tmk_core_custom/common/keyboard.h"
+   1:../../tmk_core_custom/common/keyboard.h **** /*
+   2:../../tmk_core_custom/common/keyboard.h **** Copyright 2011,2012,2013 Jun Wako <wakojun@gmail.com>
+   3:../../tmk_core_custom/common/keyboard.h **** 
+   4:../../tmk_core_custom/common/keyboard.h **** This program is free software: you can redistribute it and/or modify
+   5:../../tmk_core_custom/common/keyboard.h **** it under the terms of the GNU General Public License as published by
+   6:../../tmk_core_custom/common/keyboard.h **** the Free Software Foundation, either version 2 of the License, or
+   7:../../tmk_core_custom/common/keyboard.h **** (at your option) any later version.
+   8:../../tmk_core_custom/common/keyboard.h **** 
+   9:../../tmk_core_custom/common/keyboard.h **** This program is distributed in the hope that it will be useful,
+  10:../../tmk_core_custom/common/keyboard.h **** but WITHOUT ANY WARRANTY; without even the implied warranty of
+  11:../../tmk_core_custom/common/keyboard.h **** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  12:../../tmk_core_custom/common/keyboard.h **** GNU General Public License for more details.
+  13:../../tmk_core_custom/common/keyboard.h **** 
+  14:../../tmk_core_custom/common/keyboard.h **** You should have received a copy of the GNU General Public License
+  15:../../tmk_core_custom/common/keyboard.h **** along with this program.  If not, see <http://www.gnu.org/licenses/>.
+  16:../../tmk_core_custom/common/keyboard.h **** */
+  17:../../tmk_core_custom/common/keyboard.h **** 
+  18:../../tmk_core_custom/common/keyboard.h **** #ifndef KEYBOARD_H
+  19:../../tmk_core_custom/common/keyboard.h **** #define KEYBOARD_H
+  20:../../tmk_core_custom/common/keyboard.h **** 
+  21:../../tmk_core_custom/common/keyboard.h **** #include <stdbool.h>
+  22:../../tmk_core_custom/common/keyboard.h **** #include <stdint.h>
+  23:../../tmk_core_custom/common/keyboard.h **** 
+  24:../../tmk_core_custom/common/keyboard.h **** 
+  25:../../tmk_core_custom/common/keyboard.h **** #ifdef __cplusplus
+  26:../../tmk_core_custom/common/keyboard.h **** extern "C" {
+  27:../../tmk_core_custom/common/keyboard.h **** #endif
+  28:../../tmk_core_custom/common/keyboard.h **** 
+  29:../../tmk_core_custom/common/keyboard.h **** /* key matrix position */
+  30:../../tmk_core_custom/common/keyboard.h **** typedef struct {
+  31:../../tmk_core_custom/common/keyboard.h ****     uint8_t col;
+  32:../../tmk_core_custom/common/keyboard.h ****     uint8_t row;
+  33:../../tmk_core_custom/common/keyboard.h **** } keypos_t;
+  34:../../tmk_core_custom/common/keyboard.h **** 
+  35:../../tmk_core_custom/common/keyboard.h **** /* key event */
+  36:../../tmk_core_custom/common/keyboard.h **** typedef struct {
+  37:../../tmk_core_custom/common/keyboard.h ****     keypos_t key;
+  38:../../tmk_core_custom/common/keyboard.h ****     bool     pressed;
+  39:../../tmk_core_custom/common/keyboard.h ****     uint16_t time;
+  40:../../tmk_core_custom/common/keyboard.h **** } keyevent_t;
+  41:../../tmk_core_custom/common/keyboard.h **** 
+  42:../../tmk_core_custom/common/keyboard.h **** /* equivalent test of keypos_t */
+  43:../../tmk_core_custom/common/keyboard.h **** #define KEYEQ(keya, keyb)       ((keya).row == (keyb).row && (keya).col == (keyb).col)
+  44:../../tmk_core_custom/common/keyboard.h **** 
+  45:../../tmk_core_custom/common/keyboard.h **** /* Rules for No Event:
+  46:../../tmk_core_custom/common/keyboard.h ****  * 1) (time == 0) to handle (keyevent_t){} as empty event
+  47:../../tmk_core_custom/common/keyboard.h ****  * 2) Matrix(255, 255) to make TICK event available
+  48:../../tmk_core_custom/common/keyboard.h ****  */
+  49:../../tmk_core_custom/common/keyboard.h **** static inline bool IS_NOEVENT(keyevent_t event) { return event.time == 0 || (event.key.row == 255 &
+  50:../../tmk_core_custom/common/keyboard.h **** static inline bool IS_PRESSED(keyevent_t event) { return (!IS_NOEVENT(event) && event.pressed); }
+  51:../../tmk_core_custom/common/keyboard.h **** static inline bool IS_RELEASED(keyevent_t event) { return (!IS_NOEVENT(event) && !event.pressed); }
+  52:../../tmk_core_custom/common/keyboard.h **** 
+  53:../../tmk_core_custom/common/keyboard.h **** /* Tick event */
+  54:../../tmk_core_custom/common/keyboard.h **** #define TICK                    (keyevent_t){           \
+  55:../../tmk_core_custom/common/keyboard.h ****     .key = (keypos_t){ .row = 255, .col = 255 },           \
+  56:../../tmk_core_custom/common/keyboard.h ****     .pressed = false,                                   \
+  57:../../tmk_core_custom/common/keyboard.h ****     .time = (timer_read() | 1)                          \
+  58:../../tmk_core_custom/common/keyboard.h **** }
+  59:../../tmk_core_custom/common/keyboard.h **** 
+  60:../../tmk_core_custom/common/keyboard.h **** 
+  61:../../tmk_core_custom/common/keyboard.h **** void keyboard_init(void);
+  62:../../tmk_core_custom/common/keyboard.h **** void keyboard_task(void);
+  63:../../tmk_core_custom/common/keyboard.h **** void keyboard_set_leds(uint8_t leds);
+  64:../../tmk_core_custom/common/keyboard.h **** 
+  65:../../tmk_core_custom/common/keyboard.h **** __attribute__ ((weak)) void matrix_power_up(void) {}
+ 166               		.loc 2 65 0
+ 167               		.cfi_startproc
+ 168               	/* prologue: function */
+ 169               	/* frame size = 0 */
+ 170               	/* stack size = 0 */
+ 171               	.L__stack_usage = 0
+ 172 0000 0895      		ret
+ 173               		.cfi_endproc
+ 174               	.LFE3:
+ 176               		.section	.text.matrix_power_down,"ax",@progbits
+ 177               		.weak	matrix_power_down
+ 179               	matrix_power_down:
+ 180               	.LFB4:
+  66:../../tmk_core_custom/common/keyboard.h **** __attribute__ ((weak)) void matrix_power_down(void) {}
+ 181               		.loc 2 66 0
+ 182               		.cfi_startproc
+ 183               	/* prologue: function */
+ 184               	/* frame size = 0 */
+ 185               	/* stack size = 0 */
+ 186               	.L__stack_usage = 0
+ 187 0000 0895      		ret
+ 188               		.cfi_endproc
+ 189               	.LFE4:
+ 191               		.section	.text.ledmap_init,"ax",@progbits
+ 192               	.global	ledmap_init
+ 194               	ledmap_init:
+ 195               	.LFB6:
+  18:../../tmk_core_custom/common/ledmap.c **** {
+ 196               		.loc 1 18 0
+ 197               		.cfi_startproc
+  18:../../tmk_core_custom/common/ledmap.c **** {
+ 198               		.loc 1 18 0
+ 199 0000 0F93      		push r16
+ 200               	.LCFI7:
+ 201               		.cfi_def_cfa_offset 3
+ 202               		.cfi_offset 16, -2
+ 203 0002 1F93      		push r17
+ 204               	.LCFI8:
+ 205               		.cfi_def_cfa_offset 4
+ 206               		.cfi_offset 17, -3
+ 207 0004 CF93      		push r28
+ 208               	.LCFI9:
+ 209               		.cfi_def_cfa_offset 5
+ 210               		.cfi_offset 28, -4
+ 211 0006 DF93      		push r29
+ 212               	.LCFI10:
+ 213               		.cfi_def_cfa_offset 6
+ 214               		.cfi_offset 29, -5
+ 215               	/* prologue: function */
+ 216               	/* frame size = 0 */
+ 217               	/* stack size = 4 */
+ 218               	.L__stack_usage = 4
+ 219               	.LVL12:
+  18:../../tmk_core_custom/common/ledmap.c **** {
+ 220               		.loc 1 18 0
+ 221 0008 C0E0      		ldi r28,0
+ 222 000a D0E0      		ldi r29,0
+ 223               	.LBB3:
+ 224               	.LBB4:
+  22:../../tmk_core_custom/common/ledmap.c ****             LED_BIT_SET(reverse_binding, i);
+ 225               		.loc 1 22 0
+ 226 000c 01E0      		ldi r16,lo8(1)
+ 227 000e 10E0      		ldi r17,0
+ 228               	.LVL13:
+ 229               	.L30:
+  20:../../tmk_core_custom/common/ledmap.c ****         ledmap_t ledmap = ledmap_get_code(i);
+ 230               		.loc 1 20 0
+ 231 0010 8C2F      		mov r24,r28
+ 232 0012 0E94 0000 		call ledmap_in_eeprom_get_code
+ 233               	.LVL14:
+  21:../../tmk_core_custom/common/ledmap.c ****         if (ledmap.reverse) {
+ 234               		.loc 1 21 0
+ 235 0016 94FF      		sbrs r25,4
+ 236 0018 00C0      		rjmp .L23
+ 237               	.LVL15:
+  22:../../tmk_core_custom/common/ledmap.c ****             LED_BIT_SET(reverse_binding, i);
+ 238               		.loc 1 22 0
+ 239 001a 8091 0000 		lds r24,reverse_binding
+ 240 001e 9801      		movw r18,r16
+ 241 0020 0C2E      		mov r0,r28
+ 242 0022 00C0      		rjmp 2f
+ 243               		1:
+ 244 0024 220F      		lsl r18
+ 245               		2:
+ 246 0026 0A94      		dec r0
+ 247 0028 02F4      		brpl 1b
+ 248 002a 822B      		or r24,r18
+ 249 002c 8093 0000 		sts reverse_binding,r24
+ 250               	.L23:
+  24:../../tmk_core_custom/common/ledmap.c ****         if (ledmap.backlight) {
+ 251               		.loc 1 24 0
+ 252 0030 95FF      		sbrs r25,5
+ 253 0032 00C0      		rjmp .L24
+  25:../../tmk_core_custom/common/ledmap.c ****             LED_BIT_SET(backlight_binding, i);
+ 254               		.loc 1 25 0
+ 255 0034 8091 0000 		lds r24,backlight_binding
+ 256 0038 9801      		movw r18,r16
+ 257 003a 0C2E      		mov r0,r28
+ 258 003c 00C0      		rjmp 2f
+ 259               		1:
+ 260 003e 220F      		lsl r18
+ 261               		2:
+ 262 0040 0A94      		dec r0
+ 263 0042 02F4      		brpl 1b
+ 264 0044 822B      		or r24,r18
+ 265 0046 8093 0000 		sts backlight_binding,r24
+ 266               	.L24:
+  27:../../tmk_core_custom/common/ledmap.c ****         switch (ledmap.binding) {
+ 267               		.loc 1 27 0
+ 268 004a 9F70      		andi r25,lo8(15)
+ 269 004c 892F      		mov r24,r25
+ 270 004e 90E0      		ldi r25,0
+ 271 0050 8230      		cpi r24,2
+ 272 0052 9105      		cpc r25,__zero_reg__
+ 273 0054 01F0      		breq .L26
+ 274 0056 8330      		cpi r24,3
+ 275 0058 9105      		cpc r25,__zero_reg__
+ 276 005a 01F0      		breq .L27
+ 277 005c 8130      		cpi r24,1
+ 278 005e 9105      		cpc r25,__zero_reg__
+ 279 0060 01F4      		brne .L25
+  29:../../tmk_core_custom/common/ledmap.c ****                 LED_BIT_SET(default_layer_binding, i);
+ 280               		.loc 1 29 0
+ 281 0062 0C2E      		mov r0,r28
+ 282 0064 00C0      		rjmp 2f
+ 283               		1:
+ 284 0066 880F      		lsl r24
+ 285               		2:
+ 286 0068 0A94      		dec r0
+ 287 006a 02F4      		brpl 1b
+ 288 006c 9091 0000 		lds r25,default_layer_binding
+ 289 0070 982B      		or r25,r24
+ 290 0072 9093 0000 		sts default_layer_binding,r25
+  30:../../tmk_core_custom/common/ledmap.c ****                 break;
+ 291               		.loc 1 30 0
+ 292 0076 00C0      		rjmp .L25
+ 293               	.L26:
+  32:../../tmk_core_custom/common/ledmap.c ****                 LED_BIT_SET(layer_binding, i);
+ 294               		.loc 1 32 0
+ 295 0078 2091 0000 		lds r18,layer_binding
+ 296 007c C801      		movw r24,r16
+ 297 007e 0C2E      		mov r0,r28
+ 298 0080 00C0      		rjmp 2f
+ 299               		1:
+ 300 0082 880F      		lsl r24
+ 301               		2:
+ 302 0084 0A94      		dec r0
+ 303 0086 02F4      		brpl 1b
+ 304 0088 282B      		or r18,r24
+ 305 008a 2093 0000 		sts layer_binding,r18
+  33:../../tmk_core_custom/common/ledmap.c ****                 break;
+ 306               		.loc 1 33 0
+ 307 008e 00C0      		rjmp .L25
+ 308               	.L27:
+  35:../../tmk_core_custom/common/ledmap.c ****                 LED_BIT_SET(usb_led_binding, i);
+ 309               		.loc 1 35 0
+ 310 0090 2091 0000 		lds r18,usb_led_binding
+ 311 0094 C801      		movw r24,r16
+ 312 0096 0C2E      		mov r0,r28
+ 313 0098 00C0      		rjmp 2f
+ 314               		1:
+ 315 009a 880F      		lsl r24
+ 316               		2:
+ 317 009c 0A94      		dec r0
+ 318 009e 02F4      		brpl 1b
+ 319 00a0 282B      		or r18,r24
+ 320 00a2 2093 0000 		sts usb_led_binding,r18
+ 321               	.L25:
+ 322               	.LVL16:
+ 323 00a6 2196      		adiw r28,1
+ 324               	.LVL17:
+ 325               	.LBE4:
+  19:../../tmk_core_custom/common/ledmap.c ****     for (uint8_t i = 0; i < LED_COUNT; i++) {
+ 326               		.loc 1 19 0
+ 327 00a8 C530      		cpi r28,5
+ 328 00aa D105      		cpc r29,__zero_reg__
+ 329 00ac 01F0      		breq .+2
+ 330 00ae 00C0      		rjmp .L30
+ 331               	.LBE3:
+  39:../../tmk_core_custom/common/ledmap.c ****     ledmap_led_init();
+ 332               		.loc 1 39 0
+ 333 00b0 0E94 0000 		call ledmap_led_init
+ 334               	.LVL18:
+  40:../../tmk_core_custom/common/ledmap.c ****     update_led_state(0, 1);
+ 335               		.loc 1 40 0
+ 336 00b4 61E0      		ldi r22,lo8(1)
+ 337 00b6 80E0      		ldi r24,0
+ 338               	/* epilogue start */
+  41:../../tmk_core_custom/common/ledmap.c **** }
+ 339               		.loc 1 41 0
+ 340 00b8 DF91      		pop r29
+ 341 00ba CF91      		pop r28
+ 342               	.LVL19:
+ 343 00bc 1F91      		pop r17
+ 344 00be 0F91      		pop r16
+  40:../../tmk_core_custom/common/ledmap.c ****     update_led_state(0, 1);
+ 345               		.loc 1 40 0
+ 346 00c0 0C94 0000 		jmp update_led_state
+ 347               	.LVL20:
+ 348               		.cfi_endproc
+ 349               	.LFE6:
+ 351               		.section	.text.led_set,"ax",@progbits
+ 352               	.global	led_set
+ 354               	led_set:
+ 355               	.LFB7:
+  44:../../tmk_core_custom/common/ledmap.c **** {
+ 356               		.loc 1 44 0
+ 357               		.cfi_startproc
+ 358               	.LVL21:
+ 359 0000 CF92      		push r12
+ 360               	.LCFI11:
+ 361               		.cfi_def_cfa_offset 3
+ 362               		.cfi_offset 12, -2
+ 363 0002 DF92      		push r13
+ 364               	.LCFI12:
+ 365               		.cfi_def_cfa_offset 4
+ 366               		.cfi_offset 13, -3
+ 367 0004 EF92      		push r14
+ 368               	.LCFI13:
+ 369               		.cfi_def_cfa_offset 5
+ 370               		.cfi_offset 14, -4
+ 371 0006 FF92      		push r15
+ 372               	.LCFI14:
+ 373               		.cfi_def_cfa_offset 6
+ 374               		.cfi_offset 15, -5
+ 375 0008 0F93      		push r16
+ 376               	.LCFI15:
+ 377               		.cfi_def_cfa_offset 7
+ 378               		.cfi_offset 16, -6
+ 379 000a 1F93      		push r17
+ 380               	.LCFI16:
+ 381               		.cfi_def_cfa_offset 8
+ 382               		.cfi_offset 17, -7
+ 383 000c CF93      		push r28
+ 384               	.LCFI17:
+ 385               		.cfi_def_cfa_offset 9
+ 386               		.cfi_offset 28, -8
+ 387 000e DF93      		push r29
+ 388               	.LCFI18:
+ 389               		.cfi_def_cfa_offset 10
+ 390               		.cfi_offset 29, -9
+ 391               	/* prologue: function */
+ 392               	/* frame size = 0 */
+ 393               	/* stack size = 8 */
+ 394               	.L__stack_usage = 8
+  45:../../tmk_core_custom/common/ledmap.c ****     if (usb_led_binding) {
+ 395               		.loc 1 45 0
+ 396 0010 9091 0000 		lds r25,usb_led_binding
+ 397 0014 9923      		tst r25
+ 398 0016 01F0      		breq .L37
+ 399               	.LBB5:
+  46:../../tmk_core_custom/common/ledmap.c ****         led_state_t led_state = led_state_last;
+ 400               		.loc 1 46 0
+ 401 0018 D090 0000 		lds r13,led_state_last
+ 402               	.LVL22:
+ 403 001c C0E0      		ldi r28,0
+ 404 001e D0E0      		ldi r29,0
+ 405               	.LBB6:
+ 406               	.LBB7:
+  50:../../tmk_core_custom/common/ledmap.c ****                 (usb_led & (1 << param)) ? LED_BIT_SET(led_state, i) : LED_BIT_CLEAR(led_state, i);
+ 407               		.loc 1 50 0
+ 408 0020 E82E      		mov r14,r24
+ 409 0022 F12C      		mov r15,__zero_reg__
+ 410 0024 01E0      		ldi r16,lo8(1)
+ 411 0026 10E0      		ldi r17,0
+ 412               	.LVL23:
+ 413               	.L42:
+ 414               	.LBE7:
+  48:../../tmk_core_custom/common/ledmap.c ****             if (usb_led_binding & LED_BIT(i)) {
+ 415               		.loc 1 48 0
+ 416 0028 2091 0000 		lds r18,usb_led_binding
+ 417 002c 30E0      		ldi r19,0
+ 418 002e 8C2F      		mov r24,r28
+ 419 0030 0C2E      		mov r0,r28
+ 420 0032 00C0      		rjmp 2f
+ 421               		1:
+ 422 0034 3695      		lsr r19
+ 423 0036 2795      		ror r18
+ 424               		2:
+ 425 0038 0A94      		dec r0
+ 426 003a 02F4      		brpl 1b
+ 427 003c 20FF      		sbrs r18,0
+ 428 003e 00C0      		rjmp .L39
+ 429               	.LBB8:
+  49:../../tmk_core_custom/common/ledmap.c ****                 uint8_t param = ledmap_get_code(i).param;
+ 430               		.loc 1 49 0
+ 431 0040 0E94 0000 		call ledmap_in_eeprom_get_code
+ 432               	.LVL24:
+  50:../../tmk_core_custom/common/ledmap.c ****                 (usb_led & (1 << param)) ? LED_BIT_SET(led_state, i) : LED_BIT_CLEAR(led_state, i);
+ 433               		.loc 1 50 0
+ 434 0044 9701      		movw r18,r14
+ 435 0046 00C0      		rjmp 2f
+ 436               		1:
+ 437 0048 3595      		asr r19
+ 438 004a 2795      		ror r18
+ 439               		2:
+ 440 004c 8A95      		dec r24
+ 441 004e 02F4      		brpl 1b
+ 442 0050 C901      		movw r24,r18
+ 443               	.LVL25:
+ 444 0052 9801      		movw r18,r16
+ 445 0054 0C2E      		mov r0,r28
+ 446 0056 00C0      		rjmp 2f
+ 447               		1:
+ 448 0058 220F      		lsl r18
+ 449               		2:
+ 450 005a 0A94      		dec r0
+ 451 005c 02F4      		brpl 1b
+ 452 005e 80FF      		sbrs r24,0
+ 453 0060 00C0      		rjmp .L40
+  50:../../tmk_core_custom/common/ledmap.c ****                 (usb_led & (1 << param)) ? LED_BIT_SET(led_state, i) : LED_BIT_CLEAR(led_state, i);
+ 454               		.loc 1 50 0 is_stmt 0 discriminator 1
+ 455 0062 D22A      		or r13,r18
+ 456               	.LVL26:
+ 457 0064 00C0      		rjmp .L39
+ 458               	.L40:
+  50:../../tmk_core_custom/common/ledmap.c ****                 (usb_led & (1 << param)) ? LED_BIT_SET(led_state, i) : LED_BIT_CLEAR(led_state, i);
+ 459               		.loc 1 50 0 discriminator 2
+ 460 0066 2095      		com r18
+ 461 0068 D222      		and r13,r18
+ 462               	.LVL27:
+ 463               	.L39:
+ 464 006a 2196      		adiw r28,1
+ 465               	.LVL28:
+ 466               	.LBE8:
+  47:../../tmk_core_custom/common/ledmap.c ****         for (uint8_t i = 0; i < LED_COUNT; i++) {
+ 467               		.loc 1 47 0 is_stmt 1
+ 468 006c C530      		cpi r28,5
+ 469 006e D105      		cpc r29,__zero_reg__
+ 470 0070 01F4      		brne .L42
+ 471               	.LBE6:
+  53:../../tmk_core_custom/common/ledmap.c ****         update_led_state(led_state, 0);
+ 472               		.loc 1 53 0
+ 473 0072 60E0      		ldi r22,0
+ 474 0074 8D2D      		mov r24,r13
+ 475               	/* epilogue start */
+ 476               	.LBE5:
+  55:../../tmk_core_custom/common/ledmap.c **** }
+ 477               		.loc 1 55 0
+ 478 0076 DF91      		pop r29
+ 479 0078 CF91      		pop r28
+ 480               	.LVL29:
+ 481 007a 1F91      		pop r17
+ 482 007c 0F91      		pop r16
+ 483 007e FF90      		pop r15
+ 484 0080 EF90      		pop r14
+ 485               	.LVL30:
+ 486 0082 DF90      		pop r13
+ 487               	.LVL31:
+ 488 0084 CF90      		pop r12
+ 489               	.LBB9:
+  53:../../tmk_core_custom/common/ledmap.c ****         update_led_state(led_state, 0);
+ 490               		.loc 1 53 0
+ 491 0086 0C94 0000 		jmp update_led_state
+ 492               	.LVL32:
+ 493               	.L37:
+ 494               	/* epilogue start */
+ 495               	.LBE9:
+  55:../../tmk_core_custom/common/ledmap.c **** }
+ 496               		.loc 1 55 0
+ 497 008a DF91      		pop r29
+ 498 008c CF91      		pop r28
+ 499 008e 1F91      		pop r17
+ 500 0090 0F91      		pop r16
+ 501 0092 FF90      		pop r15
+ 502 0094 EF90      		pop r14
+ 503 0096 DF90      		pop r13
+ 504 0098 CF90      		pop r12
+ 505 009a 0895      		ret
+ 506               		.cfi_endproc
+ 507               	.LFE7:
+ 509               		.section	.text.default_layer_state_change,"ax",@progbits
+ 510               	.global	default_layer_state_change
+ 512               	default_layer_state_change:
+ 513               	.LFB8:
+  59:../../tmk_core_custom/common/ledmap.c **** {
+ 514               		.loc 1 59 0
+ 515               		.cfi_startproc
+ 516               	.LVL33:
+ 517 0000 AF92      		push r10
+ 518               	.LCFI19:
+ 519               		.cfi_def_cfa_offset 3
+ 520               		.cfi_offset 10, -2
+ 521 0002 BF92      		push r11
+ 522               	.LCFI20:
+ 523               		.cfi_def_cfa_offset 4
+ 524               		.cfi_offset 11, -3
+ 525 0004 CF92      		push r12
+ 526               	.LCFI21:
+ 527               		.cfi_def_cfa_offset 5
+ 528               		.cfi_offset 12, -4
+ 529 0006 DF92      		push r13
+ 530               	.LCFI22:
+ 531               		.cfi_def_cfa_offset 6
+ 532               		.cfi_offset 13, -5
+ 533 0008 EF92      		push r14
+ 534               	.LCFI23:
+ 535               		.cfi_def_cfa_offset 7
+ 536               		.cfi_offset 14, -6
+ 537 000a FF92      		push r15
+ 538               	.LCFI24:
+ 539               		.cfi_def_cfa_offset 8
+ 540               		.cfi_offset 15, -7
+ 541 000c 0F93      		push r16
+ 542               	.LCFI25:
+ 543               		.cfi_def_cfa_offset 9
+ 544               		.cfi_offset 16, -8
+ 545 000e 1F93      		push r17
+ 546               	.LCFI26:
+ 547               		.cfi_def_cfa_offset 10
+ 548               		.cfi_offset 17, -9
+ 549 0010 CF93      		push r28
+ 550               	.LCFI27:
+ 551               		.cfi_def_cfa_offset 11
+ 552               		.cfi_offset 28, -10
+ 553 0012 DF93      		push r29
+ 554               	.LCFI28:
+ 555               		.cfi_def_cfa_offset 12
+ 556               		.cfi_offset 29, -11
+ 557               	/* prologue: function */
+ 558               	/* frame size = 0 */
+ 559               	/* stack size = 10 */
+ 560               	.L__stack_usage = 10
+ 561 0014 6B01      		movw r12,r22
+ 562 0016 7C01      		movw r14,r24
+  60:../../tmk_core_custom/common/ledmap.c ****     if (default_layer_binding) {
+ 563               		.loc 1 60 0
+ 564 0018 8091 0000 		lds r24,default_layer_binding
+ 565 001c 8823      		tst r24
+ 566 001e 01F0      		breq .L46
+ 567               	.LBB10:
+  61:../../tmk_core_custom/common/ledmap.c ****         led_state_t led_state = led_state_last;
+ 568               		.loc 1 61 0
+ 569 0020 B090 0000 		lds r11,led_state_last
+ 570               	.LVL34:
+ 571 0024 C0E0      		ldi r28,0
+ 572 0026 D0E0      		ldi r29,0
+ 573               	.LBB11:
+ 574               	.LBB12:
+  65:../../tmk_core_custom/common/ledmap.c ****                 (state & (1UL << param)) ? LED_BIT_SET(led_state, i) : LED_BIT_CLEAR(led_state, i);
+ 575               		.loc 1 65 0
+ 576 0028 01E0      		ldi r16,lo8(1)
+ 577 002a 10E0      		ldi r17,0
+ 578               	.LVL35:
+ 579               	.L51:
+ 580               	.LBE12:
+  63:../../tmk_core_custom/common/ledmap.c ****             if (default_layer_binding & LED_BIT(i)) {
+ 581               		.loc 1 63 0
+ 582 002c 2091 0000 		lds r18,default_layer_binding
+ 583 0030 30E0      		ldi r19,0
+ 584 0032 0C2E      		mov r0,r28
+ 585 0034 00C0      		rjmp 2f
+ 586               		1:
+ 587 0036 3695      		lsr r19
+ 588 0038 2795      		ror r18
+ 589               		2:
+ 590 003a 0A94      		dec r0
+ 591 003c 02F4      		brpl 1b
+ 592 003e 20FF      		sbrs r18,0
+ 593 0040 00C0      		rjmp .L48
+ 594               	.LBB13:
+  64:../../tmk_core_custom/common/ledmap.c ****                 uint8_t param = ledmap_get_code(i).param;
+ 595               		.loc 1 64 0
+ 596 0042 8C2F      		mov r24,r28
+ 597 0044 0E94 0000 		call ledmap_in_eeprom_get_code
+ 598               	.LVL36:
+  65:../../tmk_core_custom/common/ledmap.c ****                 (state & (1UL << param)) ? LED_BIT_SET(led_state, i) : LED_BIT_CLEAR(led_state, i);
+ 599               		.loc 1 65 0
+ 600 0048 A701      		movw r20,r14
+ 601 004a 9601      		movw r18,r12
+ 602 004c 00C0      		rjmp 2f
+ 603               		1:
+ 604 004e 5695      		lsr r21
+ 605 0050 4795      		ror r20
+ 606 0052 3795      		ror r19
+ 607 0054 2795      		ror r18
+ 608               		2:
+ 609 0056 8A95      		dec r24
+ 610 0058 02F4      		brpl 1b
+ 611 005a DA01      		movw r26,r20
+ 612 005c C901      		movw r24,r18
+ 613               	.LVL37:
+ 614 005e 9801      		movw r18,r16
+ 615 0060 0C2E      		mov r0,r28
+ 616 0062 00C0      		rjmp 2f
+ 617               		1:
+ 618 0064 220F      		lsl r18
+ 619               		2:
+ 620 0066 0A94      		dec r0
+ 621 0068 02F4      		brpl 1b
+ 622 006a 80FF      		sbrs r24,0
+ 623 006c 00C0      		rjmp .L49
+  65:../../tmk_core_custom/common/ledmap.c ****                 (state & (1UL << param)) ? LED_BIT_SET(led_state, i) : LED_BIT_CLEAR(led_state, i);
+ 624               		.loc 1 65 0 is_stmt 0 discriminator 1
+ 625 006e B22A      		or r11,r18
+ 626               	.LVL38:
+ 627 0070 00C0      		rjmp .L48
+ 628               	.L49:
+  65:../../tmk_core_custom/common/ledmap.c ****                 (state & (1UL << param)) ? LED_BIT_SET(led_state, i) : LED_BIT_CLEAR(led_state, i);
+ 629               		.loc 1 65 0 discriminator 2
+ 630 0072 2095      		com r18
+ 631 0074 B222      		and r11,r18
+ 632               	.LVL39:
+ 633               	.L48:
+ 634 0076 2196      		adiw r28,1
+ 635               	.LVL40:
+ 636               	.LBE13:
+  62:../../tmk_core_custom/common/ledmap.c ****         for (uint8_t i = 0; i < LED_COUNT; i++) {
+ 637               		.loc 1 62 0 is_stmt 1
+ 638 0078 C530      		cpi r28,5
+ 639 007a D105      		cpc r29,__zero_reg__
+ 640 007c 01F4      		brne .L51
+ 641               	.LBE11:
+  68:../../tmk_core_custom/common/ledmap.c ****         update_led_state(led_state, 0);
+ 642               		.loc 1 68 0
+ 643 007e 60E0      		ldi r22,0
+ 644 0080 8B2D      		mov r24,r11
+ 645               	/* epilogue start */
+ 646               	.LBE10:
+  70:../../tmk_core_custom/common/ledmap.c **** }
+ 647               		.loc 1 70 0
+ 648 0082 DF91      		pop r29
+ 649 0084 CF91      		pop r28
+ 650               	.LVL41:
+ 651 0086 1F91      		pop r17
+ 652 0088 0F91      		pop r16
+ 653 008a FF90      		pop r15
+ 654 008c EF90      		pop r14
+ 655 008e DF90      		pop r13
+ 656 0090 CF90      		pop r12
+ 657               	.LVL42:
+ 658 0092 BF90      		pop r11
+ 659               	.LVL43:
+ 660 0094 AF90      		pop r10
+ 661               	.LBB14:
+  68:../../tmk_core_custom/common/ledmap.c ****         update_led_state(led_state, 0);
+ 662               		.loc 1 68 0
+ 663 0096 0C94 0000 		jmp update_led_state
+ 664               	.LVL44:
+ 665               	.L46:
+ 666               	/* epilogue start */
+ 667               	.LBE14:
+  70:../../tmk_core_custom/common/ledmap.c **** }
+ 668               		.loc 1 70 0
+ 669 009a DF91      		pop r29
+ 670 009c CF91      		pop r28
+ 671 009e 1F91      		pop r17
+ 672 00a0 0F91      		pop r16
+ 673 00a2 FF90      		pop r15
+ 674 00a4 EF90      		pop r14
+ 675 00a6 DF90      		pop r13
+ 676 00a8 CF90      		pop r12
+ 677               	.LVL45:
+ 678 00aa BF90      		pop r11
+ 679 00ac AF90      		pop r10
+ 680 00ae 0895      		ret
+ 681               		.cfi_endproc
+ 682               	.LFE8:
+ 684               		.section	.text.layer_state_change,"ax",@progbits
+ 685               	.global	layer_state_change
+ 687               	layer_state_change:
+ 688               	.LFB9:
+  73:../../tmk_core_custom/common/ledmap.c **** {
+ 689               		.loc 1 73 0
+ 690               		.cfi_startproc
+ 691               	.LVL46:
+ 692 0000 AF92      		push r10
+ 693               	.LCFI29:
+ 694               		.cfi_def_cfa_offset 3
+ 695               		.cfi_offset 10, -2
+ 696 0002 BF92      		push r11
+ 697               	.LCFI30:
+ 698               		.cfi_def_cfa_offset 4
+ 699               		.cfi_offset 11, -3
+ 700 0004 CF92      		push r12
+ 701               	.LCFI31:
+ 702               		.cfi_def_cfa_offset 5
+ 703               		.cfi_offset 12, -4
+ 704 0006 DF92      		push r13
+ 705               	.LCFI32:
+ 706               		.cfi_def_cfa_offset 6
+ 707               		.cfi_offset 13, -5
+ 708 0008 EF92      		push r14
+ 709               	.LCFI33:
+ 710               		.cfi_def_cfa_offset 7
+ 711               		.cfi_offset 14, -6
+ 712 000a FF92      		push r15
+ 713               	.LCFI34:
+ 714               		.cfi_def_cfa_offset 8
+ 715               		.cfi_offset 15, -7
+ 716 000c 0F93      		push r16
+ 717               	.LCFI35:
+ 718               		.cfi_def_cfa_offset 9
+ 719               		.cfi_offset 16, -8
+ 720 000e 1F93      		push r17
+ 721               	.LCFI36:
+ 722               		.cfi_def_cfa_offset 10
+ 723               		.cfi_offset 17, -9
+ 724 0010 CF93      		push r28
+ 725               	.LCFI37:
+ 726               		.cfi_def_cfa_offset 11
+ 727               		.cfi_offset 28, -10
+ 728 0012 DF93      		push r29
+ 729               	.LCFI38:
+ 730               		.cfi_def_cfa_offset 12
+ 731               		.cfi_offset 29, -11
+ 732               	/* prologue: function */
+ 733               	/* frame size = 0 */
+ 734               	/* stack size = 10 */
+ 735               	.L__stack_usage = 10
+ 736 0014 6B01      		movw r12,r22
+ 737 0016 7C01      		movw r14,r24
+  74:../../tmk_core_custom/common/ledmap.c ****     if (layer_binding) {
+ 738               		.loc 1 74 0
+ 739 0018 8091 0000 		lds r24,layer_binding
+ 740 001c 8823      		tst r24
+ 741 001e 01F0      		breq .L55
+ 742               	.LBB15:
+  75:../../tmk_core_custom/common/ledmap.c ****         led_state_t led_state = led_state_last;
+ 743               		.loc 1 75 0
+ 744 0020 B090 0000 		lds r11,led_state_last
+ 745               	.LVL47:
+ 746 0024 C0E0      		ldi r28,0
+ 747 0026 D0E0      		ldi r29,0
+ 748               	.LBB16:
+ 749               	.LBB17:
+  79:../../tmk_core_custom/common/ledmap.c ****                 (state & (1UL << param)) ? LED_BIT_SET(led_state, i) : LED_BIT_CLEAR(led_state, i);
+ 750               		.loc 1 79 0
+ 751 0028 01E0      		ldi r16,lo8(1)
+ 752 002a 10E0      		ldi r17,0
+ 753               	.LVL48:
+ 754               	.L60:
+ 755               	.LBE17:
+  77:../../tmk_core_custom/common/ledmap.c ****             if (layer_binding & LED_BIT(i)) {
+ 756               		.loc 1 77 0
+ 757 002c 2091 0000 		lds r18,layer_binding
+ 758 0030 30E0      		ldi r19,0
+ 759 0032 0C2E      		mov r0,r28
+ 760 0034 00C0      		rjmp 2f
+ 761               		1:
+ 762 0036 3695      		lsr r19
+ 763 0038 2795      		ror r18
+ 764               		2:
+ 765 003a 0A94      		dec r0
+ 766 003c 02F4      		brpl 1b
+ 767 003e 20FF      		sbrs r18,0
+ 768 0040 00C0      		rjmp .L57
+ 769               	.LBB18:
+  78:../../tmk_core_custom/common/ledmap.c ****                 uint8_t param = ledmap_get_code(i).param;
+ 770               		.loc 1 78 0
+ 771 0042 8C2F      		mov r24,r28
+ 772 0044 0E94 0000 		call ledmap_in_eeprom_get_code
+ 773               	.LVL49:
+  79:../../tmk_core_custom/common/ledmap.c ****                 (state & (1UL << param)) ? LED_BIT_SET(led_state, i) : LED_BIT_CLEAR(led_state, i);
+ 774               		.loc 1 79 0
+ 775 0048 A701      		movw r20,r14
+ 776 004a 9601      		movw r18,r12
+ 777 004c 00C0      		rjmp 2f
+ 778               		1:
+ 779 004e 5695      		lsr r21
+ 780 0050 4795      		ror r20
+ 781 0052 3795      		ror r19
+ 782 0054 2795      		ror r18
+ 783               		2:
+ 784 0056 8A95      		dec r24
+ 785 0058 02F4      		brpl 1b
+ 786 005a DA01      		movw r26,r20
+ 787 005c C901      		movw r24,r18
+ 788               	.LVL50:
+ 789 005e 9801      		movw r18,r16
+ 790 0060 0C2E      		mov r0,r28
+ 791 0062 00C0      		rjmp 2f
+ 792               		1:
+ 793 0064 220F      		lsl r18
+ 794               		2:
+ 795 0066 0A94      		dec r0
+ 796 0068 02F4      		brpl 1b
+ 797 006a 80FF      		sbrs r24,0
+ 798 006c 00C0      		rjmp .L58
+  79:../../tmk_core_custom/common/ledmap.c ****                 (state & (1UL << param)) ? LED_BIT_SET(led_state, i) : LED_BIT_CLEAR(led_state, i);
+ 799               		.loc 1 79 0 is_stmt 0 discriminator 1
+ 800 006e B22A      		or r11,r18
+ 801               	.LVL51:
+ 802 0070 00C0      		rjmp .L57
+ 803               	.L58:
+  79:../../tmk_core_custom/common/ledmap.c ****                 (state & (1UL << param)) ? LED_BIT_SET(led_state, i) : LED_BIT_CLEAR(led_state, i);
+ 804               		.loc 1 79 0 discriminator 2
+ 805 0072 2095      		com r18
+ 806 0074 B222      		and r11,r18
+ 807               	.LVL52:
+ 808               	.L57:
+ 809 0076 2196      		adiw r28,1
+ 810               	.LVL53:
+ 811               	.LBE18:
+  76:../../tmk_core_custom/common/ledmap.c ****         for (uint8_t i = 0; i < LED_COUNT; i++) {
+ 812               		.loc 1 76 0 is_stmt 1
+ 813 0078 C530      		cpi r28,5
+ 814 007a D105      		cpc r29,__zero_reg__
+ 815 007c 01F4      		brne .L60
+ 816               	.LBE16:
+  82:../../tmk_core_custom/common/ledmap.c ****         update_led_state(led_state, 0);
+ 817               		.loc 1 82 0
+ 818 007e 60E0      		ldi r22,0
+ 819 0080 8B2D      		mov r24,r11
+ 820               	/* epilogue start */
+ 821               	.LBE15:
+  84:../../tmk_core_custom/common/ledmap.c **** }
+ 822               		.loc 1 84 0
+ 823 0082 DF91      		pop r29
+ 824 0084 CF91      		pop r28
+ 825               	.LVL54:
+ 826 0086 1F91      		pop r17
+ 827 0088 0F91      		pop r16
+ 828 008a FF90      		pop r15
+ 829 008c EF90      		pop r14
+ 830 008e DF90      		pop r13
+ 831 0090 CF90      		pop r12
+ 832               	.LVL55:
+ 833 0092 BF90      		pop r11
+ 834               	.LVL56:
+ 835 0094 AF90      		pop r10
+ 836               	.LBB19:
+  82:../../tmk_core_custom/common/ledmap.c ****         update_led_state(led_state, 0);
+ 837               		.loc 1 82 0
+ 838 0096 0C94 0000 		jmp update_led_state
+ 839               	.LVL57:
+ 840               	.L55:
+ 841               	/* epilogue start */
+ 842               	.LBE19:
+  84:../../tmk_core_custom/common/ledmap.c **** }
+ 843               		.loc 1 84 0
+ 844 009a DF91      		pop r29
+ 845 009c CF91      		pop r28
+ 846 009e 1F91      		pop r17
+ 847 00a0 0F91      		pop r16
+ 848 00a2 FF90      		pop r15
+ 849 00a4 EF90      		pop r14
+ 850 00a6 DF90      		pop r13
+ 851 00a8 CF90      		pop r12
+ 852               	.LVL58:
+ 853 00aa BF90      		pop r11
+ 854 00ac AF90      		pop r10
+ 855 00ae 0895      		ret
+ 856               		.cfi_endproc
+ 857               	.LFE9:
+ 859               		.section	.text.softpwm_led_init,"ax",@progbits
+ 860               	.global	softpwm_led_init
+ 862               	softpwm_led_init:
+ 863               	.LFB10:
+  89:../../tmk_core_custom/common/ledmap.c **** {
+ 864               		.loc 1 89 0
+ 865               		.cfi_startproc
+ 866               	/* prologue: function */
+ 867               	/* frame size = 0 */
+ 868               	/* stack size = 0 */
+ 869               	.L__stack_usage = 0
+ 870 0000 0895      		ret
+ 871               		.cfi_endproc
+ 872               	.LFE10:
+ 874               		.section	.text.softpwm_led_on,"ax",@progbits
+ 875               	.global	softpwm_led_on
+ 877               	softpwm_led_on:
+ 878               	.LFB11:
+  93:../../tmk_core_custom/common/ledmap.c **** {
+ 879               		.loc 1 93 0
+ 880               		.cfi_startproc
+ 881               	.LVL59:
+ 882               	/* prologue: function */
+ 883               	/* frame size = 0 */
+ 884               	/* stack size = 0 */
+ 885               	.L__stack_usage = 0
+  94:../../tmk_core_custom/common/ledmap.c ****     if (backlight_binding & LED_BIT(index)) {
+ 886               		.loc 1 94 0
+ 887 0000 2091 0000 		lds r18,backlight_binding
+ 888 0004 30E0      		ldi r19,0
+ 889 0006 082E      		mov r0,r24
+ 890 0008 00C0      		rjmp 2f
+ 891               		1:
+ 892 000a 3695      		lsr r19
+ 893 000c 2795      		ror r18
+ 894               		2:
+ 895 000e 0A94      		dec r0
+ 896 0010 02F4      		brpl 1b
+ 897 0012 20FD      		sbrc r18,0
+  95:../../tmk_core_custom/common/ledmap.c ****         ledmap_led_on(index);
+ 898               		.loc 1 95 0
+ 899 0014 0C94 0000 		jmp ledmap_led_on
+ 900               	.LVL60:
+ 901               	.L65:
+ 902 0018 0895      		ret
+ 903               		.cfi_endproc
+ 904               	.LFE11:
+ 906               		.section	.text.softpwm_led_off,"ax",@progbits
+ 907               	.global	softpwm_led_off
+ 909               	softpwm_led_off:
+ 910               	.LFB12:
+ 100:../../tmk_core_custom/common/ledmap.c **** {
+ 911               		.loc 1 100 0
+ 912               		.cfi_startproc
+ 913               	.LVL61:
+ 914               	/* prologue: function */
+ 915               	/* frame size = 0 */
+ 916               	/* stack size = 0 */
+ 917               	.L__stack_usage = 0
+ 101:../../tmk_core_custom/common/ledmap.c ****     if (backlight_binding & LED_BIT(index)) {
+ 918               		.loc 1 101 0
+ 919 0000 2091 0000 		lds r18,backlight_binding
+ 920 0004 30E0      		ldi r19,0
+ 921 0006 082E      		mov r0,r24
+ 922 0008 00C0      		rjmp 2f
+ 923               		1:
+ 924 000a 3695      		lsr r19
+ 925 000c 2795      		ror r18
+ 926               		2:
+ 927 000e 0A94      		dec r0
+ 928 0010 02F4      		brpl 1b
+ 929 0012 20FD      		sbrc r18,0
+ 102:../../tmk_core_custom/common/ledmap.c ****         ledmap_led_off(index);
+ 930               		.loc 1 102 0
+ 931 0014 0C94 0000 		jmp ledmap_led_off
+ 932               	.LVL62:
+ 933               	.L67:
+ 934 0018 0895      		ret
+ 935               		.cfi_endproc
+ 936               	.LFE12:
+ 938               		.section	.text.softpwm_led_state_change,"ax",@progbits
+ 939               	.global	softpwm_led_state_change
+ 941               	softpwm_led_state_change:
+ 942               	.LFB13:
+ 107:../../tmk_core_custom/common/ledmap.c **** {
+ 943               		.loc 1 107 0
+ 944               		.cfi_startproc
+ 945               	.LVL63:
+ 946               	/* prologue: function */
+ 947               	/* frame size = 0 */
+ 948               	/* stack size = 0 */
+ 949               	.L__stack_usage = 0
+ 108:../../tmk_core_custom/common/ledmap.c ****     if (state) {
+ 950               		.loc 1 108 0
+ 951 0000 8111      		cpse r24,__zero_reg__
+ 952 0002 00C0      		rjmp .L69
+ 111:../../tmk_core_custom/common/ledmap.c ****         update_led_state(led_state_last, 1);
+ 953               		.loc 1 111 0
+ 954 0004 61E0      		ldi r22,lo8(1)
+ 955 0006 8091 0000 		lds r24,led_state_last
+ 956               	.LVL64:
+ 957 000a 0C94 0000 		jmp update_led_state
+ 958               	.LVL65:
+ 959               	.L69:
+ 960 000e 0895      		ret
+ 961               		.cfi_endproc
+ 962               	.LFE13:
+ 964               		.section	.bss.reverse_binding,"aw",@nobits
+ 967               	reverse_binding:
+ 968 0000 00        		.zero	1
+ 969               		.section	.bss.backlight_binding,"aw",@nobits
+ 972               	backlight_binding:
+ 973 0000 00        		.zero	1
+ 974               		.section	.bss.layer_binding,"aw",@nobits
+ 977               	layer_binding:
+ 978 0000 00        		.zero	1
+ 979               		.section	.bss.default_layer_binding,"aw",@nobits
+ 982               	default_layer_binding:
+ 983 0000 00        		.zero	1
+ 984               		.section	.bss.usb_led_binding,"aw",@nobits
+ 987               	usb_led_binding:
+ 988 0000 00        		.zero	1
+ 989               		.section	.bss.led_state_last,"aw",@nobits
+ 992               	led_state_last:
+ 993 0000 00        		.zero	1
+ 994               		.text
+ 995               	.Letext0:
+ 996               		.file 3 "/usr/local/CrossPack-AVR-20131216/avr/include/stdint.h"
+ 997               		.file 4 "../../tmk_core_custom/common/led.h"
+ 998               		.file 5 "../../tmk_core_custom/common/ledmap.h"
+ 999               		.file 6 "../../tmk_core_custom/common/softpwm_led.h"
+ 1000               		.file 7 "../../tmk_core_custom/common/ledmap_in_eeprom.h"
+DEFINED SYMBOLS
+                            *ABS*:00000000 ledmap.c
+/var/folders/21/2h6z05gn50s9p53ctp4w8vd00000gn/T//cc3t54Rn.s:2      *ABS*:0000003e __SP_H__
+/var/folders/21/2h6z05gn50s9p53ctp4w8vd00000gn/T//cc3t54Rn.s:3      *ABS*:0000003d __SP_L__
+/var/folders/21/2h6z05gn50s9p53ctp4w8vd00000gn/T//cc3t54Rn.s:4      *ABS*:0000003f __SREG__
+/var/folders/21/2h6z05gn50s9p53ctp4w8vd00000gn/T//cc3t54Rn.s:5      *ABS*:00000000 __tmp_reg__
+/var/folders/21/2h6z05gn50s9p53ctp4w8vd00000gn/T//cc3t54Rn.s:6      *ABS*:00000001 __zero_reg__
+/var/folders/21/2h6z05gn50s9p53ctp4w8vd00000gn/T//cc3t54Rn.s:12     .text.update_led_state:00000000 update_led_state
+/var/folders/21/2h6z05gn50s9p53ctp4w8vd00000gn/T//cc3t54Rn.s:992    .bss.led_state_last:00000000 led_state_last
+/var/folders/21/2h6z05gn50s9p53ctp4w8vd00000gn/T//cc3t54Rn.s:972    .bss.backlight_binding:00000000 backlight_binding
+/var/folders/21/2h6z05gn50s9p53ctp4w8vd00000gn/T//cc3t54Rn.s:967    .bss.reverse_binding:00000000 reverse_binding
+/var/folders/21/2h6z05gn50s9p53ctp4w8vd00000gn/T//cc3t54Rn.s:163    .text.matrix_power_up:00000000 matrix_power_up
+/var/folders/21/2h6z05gn50s9p53ctp4w8vd00000gn/T//cc3t54Rn.s:179    .text.matrix_power_down:00000000 matrix_power_down
+/var/folders/21/2h6z05gn50s9p53ctp4w8vd00000gn/T//cc3t54Rn.s:194    .text.ledmap_init:00000000 ledmap_init
+/var/folders/21/2h6z05gn50s9p53ctp4w8vd00000gn/T//cc3t54Rn.s:982    .bss.default_layer_binding:00000000 default_layer_binding
+/var/folders/21/2h6z05gn50s9p53ctp4w8vd00000gn/T//cc3t54Rn.s:977    .bss.layer_binding:00000000 layer_binding
+/var/folders/21/2h6z05gn50s9p53ctp4w8vd00000gn/T//cc3t54Rn.s:987    .bss.usb_led_binding:00000000 usb_led_binding
+/var/folders/21/2h6z05gn50s9p53ctp4w8vd00000gn/T//cc3t54Rn.s:354    .text.led_set:00000000 led_set
+/var/folders/21/2h6z05gn50s9p53ctp4w8vd00000gn/T//cc3t54Rn.s:512    .text.default_layer_state_change:00000000 default_layer_state_change
+/var/folders/21/2h6z05gn50s9p53ctp4w8vd00000gn/T//cc3t54Rn.s:687    .text.layer_state_change:00000000 layer_state_change
+/var/folders/21/2h6z05gn50s9p53ctp4w8vd00000gn/T//cc3t54Rn.s:862    .text.softpwm_led_init:00000000 softpwm_led_init
+/var/folders/21/2h6z05gn50s9p53ctp4w8vd00000gn/T//cc3t54Rn.s:877    .text.softpwm_led_on:00000000 softpwm_led_on
+/var/folders/21/2h6z05gn50s9p53ctp4w8vd00000gn/T//cc3t54Rn.s:909    .text.softpwm_led_off:00000000 softpwm_led_off
+/var/folders/21/2h6z05gn50s9p53ctp4w8vd00000gn/T//cc3t54Rn.s:941    .text.softpwm_led_state_change:00000000 softpwm_led_state_change
+
+UNDEFINED SYMBOLS
+softpwm_led_get_state
+ledmap_led_on
+ledmap_led_off
+ledmap_in_eeprom_get_code
+ledmap_led_init
+__do_clear_bss
